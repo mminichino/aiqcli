@@ -344,6 +344,8 @@ class activeiq:
 
         self.capacityDetail(lookup_id)
 
+        forecast_data = { 'results' : [] }
+        sorted_data = {}
         for key in self.capacity_detail:
             if key == "message":
                 print("Error: " + self.capacity_detail[key])
@@ -352,17 +354,35 @@ class activeiq:
                 for detail in self.capacity_detail[key]:
                     for category in self.capacity_detail[key][detail]:
                         if category == "current_90":
-                            fullStatus = "Currently_Full"
+                            fullStatus = "Currently Full"
                         elif category == "1_month_90":
-                            fullStatus = "1_Month_to_Full"
+                            fullStatus = "1 Month To Full"
                         elif category == "3_months_90":
-                            fullStatus = "3_Months_to_Full"
+                            fullStatus = "3 Months To Full"
                         elif category == "6_months_90":
-                            fullStatus = "6_Months_to_Full"
+                            fullStatus = "6 Months To Full"
                         else:
-                            fullStatus = "More_than_6_Months"
+                            fullStatus = "More Than 6 Months To Full"
                         for system in self.capacity_detail[key][detail][category]:
-                            print(fullStatus + ": Hostname: " + system['hostname'] + " Capacity: " + str(system['percent_capacity']))
+                            system_entry = {}
+                            system_hostname = { 'hostname' : system['hostname'] }
+                            system_capacity_percent = { 'capacity' : system['percent_capacity'] }
+                            system_full_status = { 'status' : fullStatus }
+                            system_entry.update(system_hostname)
+                            system_entry.update(system_capacity_percent)
+                            system_entry.update(system_full_status)
+                            forecast_data['results'].append(system_entry)
+
+        sorted_data['results'] = sorted(forecast_data['results'], key=lambda k: k['capacity'], reverse=False)
+
+        for x in range(len(sorted_data['results'])):
+            if x == 0:
+                print("%s %s %s" % ('Hostname'.ljust(25),
+                                    'Percent'.ljust(10),
+                                    'Time To Full'))
+            print("%s %s %s" % (str(sorted_data['results'][x]['hostname']).ljust(25),
+                                str(sorted_data['results'][x]['capacity']).ljust(10),
+                                str(sorted_data['results'][x]['status'])))
 
     def cluster(self, lookup, name=False):
 
