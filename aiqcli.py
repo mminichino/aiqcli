@@ -179,6 +179,7 @@ class activeiq:
         self.cluster_summary_data = {}
         self.cluster_resolver = {}
         self.cluster_id = {}
+        self.node_efficiency = {}
         self.id = []
 
     def customerLookup(self, lookup):
@@ -232,6 +233,24 @@ class activeiq:
 
         response = requests.get(url, headers=headers, verify=False)
         self.cluster_id = json.loads(response.text)
+
+    def nodeEfficiency(self, lookup, **kwargs):
+
+        headers = {'accept': 'application/json', 'authorizationToken': self.authToken}
+        url = 'https://api.activeiq.netapp.com/v1/efficiency/summary/level/serial_numbers/id/' + lookup
+
+        response = requests.get(url, headers=headers, verify=False)
+        json_data = json.loads(response.text)
+        node_entry = { lookup : {} }
+        for key in json_data['efficiency']['systems']['system'][0]:
+            node_entry[lookup].update({ key : json_data['efficiency']['systems']['system'][0][key] })
+        for key, value in kwargs.items():
+            node_entry[lookup].update({ key : value })
+        self.node_efficiency.update(node_entry)
+
+    def clusterNodeUpdate(self, json_data):
+
+        self.nodeEfficiency(json_data['serial'], model=json_data['model'])
 
     def lookup(self, lookup, output=False):
 
@@ -411,18 +430,32 @@ class activeiq:
                 sys.exit(1)
             if key == "data":
                 for attribute in self.cluster_summary_data[key][0]:
-                    print("%s = %s" % (str(attribute).ljust(35), self.cluster_summary_data[key][0][attribute]))
+                    print("%s = %s" % (str(attribute).ljust(25), self.cluster_summary_data[key][0][attribute]))
 
+        threads = []
         for key in self.cluster_resolver:
             if key == "message":
                 print("Error: " + self.cluster_resolver[key])
                 sys.exit(1)
             if key == "clusters":
                 for x in range(len(self.cluster_resolver[key][0]['nodes'])):
-                    print("Node [%02d] %s = Serial: %s Model: %s" % (x+1,
-                                                                    str(self.cluster_resolver[key][0]['nodes'][x]['name']).ljust(25),
-                                                                    str(self.cluster_resolver[key][0]['nodes'][x]['serial']),
-                                                                    str(self.cluster_resolver[key][0]['nodes'][x]['model'])))
+                    runThread = threading.Thread(target=self.clusterNodeUpdate, args=(self.cluster_resolver[key][0]['nodes'][x],))
+                    runThread.start()
+                    threads.append(runThread)
+
+        for x in range(len(threads)):
+            threads[x].join()
+
+        total_efficiency = 0.0
+        for key in self.node_efficiency:
+            total_efficiency = total_efficiency + float(self.node_efficiency[key]['node_overall_efficiency_ratio_without_clone_snapshot'])
+            print("%s = Serial: %s Model: %s Efficiency: %s" % (str(self.node_efficiency[key]['hostname']).ljust(25),
+                                                           str(self.node_efficiency[key]['serial_number']),
+                                                           str(self.node_efficiency[key]['model']).ljust(10),
+                                                           str(self.node_efficiency[key]['node_overall_efficiency_ratio_without_clone_snapshot'])))
+
+        average_efficiency = float(total_efficiency) / float(len(self.node_efficiency))
+        print("Average Efficiency: %.2f" % average_efficiency)
 
 def main():
 
